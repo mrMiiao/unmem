@@ -5,6 +5,9 @@
 #![allow(unused_mut)]
 #![allow(unused_unsafe)]
 
+#[cfg(not(debug_assertions))]
+compile_error!("Don't deploy this shit to production you madman");
+
 /// Changes value of immutable variable.
 /// 
 /// Example:
