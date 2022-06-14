@@ -1,12 +1,10 @@
 //! unmem crate contains some interesting functions. I tried to make them as safe as possible. However, remember that even not marked as unsafe they still can be dangerous.
 //! All of these functions may cause UB!
+//! Don't deploy this shit to production you madman!
 
 #![no_std]
 #![allow(unused_mut)]
 #![allow(unused_unsafe)]
-
-#[cfg(not(debug_assertions))]
-compile_error!("Don't deploy this shit to production you madman");
 
 /// Changes value of immutable variable.
 /// 
