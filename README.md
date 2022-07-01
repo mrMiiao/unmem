@@ -4,7 +4,7 @@
 
 # unmem
 
-Some memory working functions. Not marked as unsafe BUT STILL ARE.
+Some memory working stuff.
 
 Examples:
 ```rust
@@ -30,4 +30,13 @@ fn main() {
 }
 ```
 
-# Don't deploy this shit to production you madman!
+```rust
+extern crate unmem;
+use unmem::Ptr;
+
+fn main() {
+    let foo: [u8; 4] = [5, 6, 7, 8];
+    let bar: Ptr<u8> = Ptr::from_ref(&foo[3]);
+    println!("{}", bar[-1]); // >> 7
+}
+```

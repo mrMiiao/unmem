@@ -1,10 +1,10 @@
 [package]
 name = 'unmem'
-version = '0.1.0'
+version = '0.2.0'
 edition = '2021'
 authors = ['Miiao']
 repository = 'https://github.com/mrMiiao/unmem'
 keywords = ['memory', 'mut', 'unsafe', 'ub']
 readme = 'README.md'
 license = 'MPL-2.0'
-description = 'Beware! Unsafe functions are not marked as unsafe!'
+description = 'Beware!'
