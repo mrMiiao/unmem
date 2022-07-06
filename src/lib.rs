@@ -7,6 +7,8 @@
 #![allow(non_camel_case_types)]
 #![feature(box_syntax)]
 #![feature(decl_macro)]
+#![feature(const_mut_refs)]
+#![feature(const_ptr_read)]
 
 extern crate alloc;
 use alloc::boxed::Box;
@@ -20,15 +22,23 @@ use alloc::boxed::Box;
 /// ```
 pub fn change<T>(src: &T, to: T) {
     unsafe {
-        *((src as *const T) as usize as *mut T) = to;
+        *(src as *const T as *mut T) = to;
     }
 }
 
 /// Gives you a mutable reference from immutable.
-pub fn get_mut<T>(src: &T) -> &mut T {
+pub const fn get_mut<T>(src: &T) -> &mut T {
     unsafe {
-        &mut (*((src as *const T) as usize as *mut T))
+        &mut (*(src as *const T as *mut T))
     }
+}
+
+/// Read value of *const non-Copy T.
+pub use core::ptr::read;
+
+/// Similar to read but for *mut T.
+pub const unsafe fn read_mut<T>(src: *mut T) -> T {
+    read(src as *const T)
 }
 
 /// Analogue of memset.
@@ -42,7 +52,7 @@ pub fn set<T>(to: &mut T, val: u8, size: usize) -> &mut T {
 /// Internal of transmute macro.
 pub unsafe fn cast<FROM, TO>(src: FROM) -> TO {
     unsafe {
-        core::ptr::read(&src as *const FROM as usize as *const TO)
+        read(&src as *const FROM as *const TO)
     }
 }
 
@@ -55,7 +65,7 @@ pub unsafe fn cast<FROM, TO>(src: FROM) -> TO {
 /// ```
 pub macro transmute($from:ty => $to:ty, $src:expr) {
     unsafe {
-        cast::<$from, $to>($src)
+        $crate::cast::<$from, $to>($src)
     }
 }
 
@@ -68,7 +78,7 @@ pub unsafe fn write<T>(to: usize, val: T) {
 }
 
 /// Returns value from address.
-pub unsafe fn get<T>(from: usize) -> &'static T {
+pub const unsafe fn get<T>(from: usize) -> &'static T {
     unsafe {
         &*(from as *mut T)
     }
@@ -99,9 +109,16 @@ pub unsafe fn orient<T>(src: &T, val: isize) -> &T {
     }
 }
 
+/// Similar to orient but returns &mut.
+pub unsafe fn orient_mut<T>(src: &T, val: isize) -> &mut T {
+    unsafe {
+        &mut *((get_address(get_mut(src)) as isize + val) as usize as *mut T)
+    }
+}
+
 /// Mean safe wrapper around raw pointers.
 #[repr(transparent)]
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Ptr<T: ?Sized> {
     ptr: *mut T
 }
@@ -115,15 +132,15 @@ impl<T> Ptr<T> {
     }
 
     /// Get value of T.
-    pub fn get(&self) -> T {
+    pub const fn get(&self) -> T {
         unsafe {
-            core::ptr::read(self.as_ptr())
+            read_mut(self.ptr)
         }
     }
 
     /// Ptr<T> -> &T;
     #[inline]
-    pub fn as_ref(&self) -> &T {
+    pub const fn as_ref(&self) -> &T {
         unsafe {
             &*self.ptr
         }
@@ -131,7 +148,7 @@ impl<T> Ptr<T> {
 
     /// Ptr<T> -> &mut T;
     #[inline]
-    pub fn as_mut_ref(&self) -> &mut T {
+    pub const fn as_mut_ref(&self) -> &mut T {
         unsafe {
             &mut *self.ptr
         }
@@ -151,7 +168,7 @@ impl<T> Ptr<T> {
 
     /// Ptr<T> -> *const T;
     #[inline]
-    pub fn as_ptr(&self) -> *const T {
+    pub const fn as_ptr(&self) -> *const T {
         self.as_ref() as *const T
     }
 
@@ -189,13 +206,13 @@ impl<T> Ptr<T> {
     #[inline]
     pub fn from_ref(src: &T) -> Self {
         Self {
-            ptr: transmute!(*const T => *mut T, src as *const T)
+            ptr: src as *const T as *mut T
         }
     }
 
     /// &mut T -> Ptr<T>.
     #[inline]
-    pub fn from_mut_ref(src: &mut T) -> Self {
+    pub const fn from_mut_ref(src: &mut T) -> Self {
         Self {
             ptr: src as *mut T
         }
@@ -205,7 +222,7 @@ impl<T> Ptr<T> {
     #[inline]
     pub unsafe fn from_ptr(src: *const T) -> Self {
         Self {
-            ptr: transmute!(*const T => *mut T, src)
+            ptr: src as *mut T
         }
     }
 
@@ -230,7 +247,7 @@ impl<T> Ptr<T> {
 
     /// Returns size of 'T' from Ptr<T>.
     #[inline]
-    pub fn size(&self) -> usize {
+    pub const fn size(&self) -> usize {
         core::mem::size_of::<T>()
     }
 
@@ -284,9 +301,23 @@ impl<T> core::ops::Index<isize> for Ptr<T> {
     }
 }
 
+impl<T> core::ops::IndexMut<isize> for Ptr<T> {
+    fn index_mut(&mut self, index: isize) -> &mut Self::Output {
+        unsafe {
+            orient_mut(&*self.ptr, index)
+        }
+    }
+}
+
 impl<T: core::fmt::Display> core::fmt::Display for Ptr<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", **self)
+    }
+}
+
+impl<T: core::fmt::Debug> core::fmt::Debug for Ptr<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{:?}", **self)
     }
 }
 
