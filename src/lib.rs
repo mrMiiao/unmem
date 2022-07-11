@@ -5,10 +5,7 @@
 #![allow(unused_mut)]
 #![allow(unused_unsafe)]
 #![allow(non_camel_case_types)]
-#![feature(box_syntax)]
-#![feature(decl_macro)]
-#![feature(const_mut_refs)]
-#![feature(const_ptr_read)]
+#![feature(box_syntax, untagged_unions, decl_macro, const_mut_refs, const_ptr_read)]
 
 extern crate alloc;
 use alloc::boxed::Box;
@@ -84,9 +81,11 @@ pub const unsafe fn get<T>(from: usize) -> &'static T {
     }
 }
 
-/// Drops given variable.
-pub fn drop<T>(_src: T) {
-    ()
+/// Free memory by mutable reference.
+pub fn free<T>(src: &mut T) {
+    unsafe {
+        core::ptr::drop_in_place(src as *mut T)
+    }
 }
 
 /// Returns address from reference.
@@ -118,7 +117,7 @@ pub unsafe fn orient_mut<T>(src: &T, val: isize) -> &mut T {
 
 /// Mean safe wrapper around raw pointers.
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct Ptr<T: ?Sized> {
     ptr: *mut T
 }
@@ -180,9 +179,13 @@ impl<T> Ptr<T> {
 
     /// Ptr<T> -> usize;
     #[inline]
-    pub fn as_adr(&self) -> usize {
+    pub const fn as_adr(&self) -> usize {
+        union Adr<T> {
+            ptr: *mut T,
+            adr: usize
+        }
         unsafe {
-            (*self).ptr as usize
+            Adr {ptr: self.ptr}.adr
         }
     }
 
@@ -204,7 +207,7 @@ impl<T> Ptr<T> {
 
     /// &T -> Ptr<T>.
     #[inline]
-    pub fn from_ref(src: &T) -> Self {
+    pub const fn from_ref(src: &T) -> Self {
         Self {
             ptr: src as *const T as *mut T
         }
@@ -220,7 +223,7 @@ impl<T> Ptr<T> {
 
     /// Pointers are not guaranteed to be not null!
     #[inline]
-    pub unsafe fn from_ptr(src: *const T) -> Self {
+    pub const unsafe fn from_ptr(src: *const T) -> Self {
         Self {
             ptr: src as *mut T
         }
@@ -274,6 +277,12 @@ impl<T> Ptr<T> {
     /// ```
     pub unsafe fn transmute<TO>(&self) -> TO {
         transmute!(T => TO, self.get())
+    }
+
+    /// Drops Ptr and value.
+    #[inline]
+    pub fn drop(self) {
+        free(self.as_mut_ref())
     }
 }
 
